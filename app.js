@@ -620,6 +620,7 @@ async function naploLap(oldal = 0) {
       if (n.tabla === 'sf_szoveg') return 'cikkszöveg javítva';
       if (n.tabla === 'sf_ellenorzendo') return n.muvelet === 'INSERT' ? `új ellenőrzendő: ${esc(u.leiras)}` : `ellenőrzendő lezárva${u.valasz ? ': ' + esc(u.valasz) : ''}`;
       if (n.tabla === 'sf_munkatarsak') return `munkatárs: ${esc(u.email || r.email)} (${esc(u.szerep || '')}${u.aktiv === false ? ', inaktív' : ''})`;
+      if (n.tabla === 'belepesi_fiok') return `belépési fiók – ${esc(u.email)}: ${n.muvelet === 'LETREHOZAS' ? 'létrehozva' : 'új ideiglenes jelszó'}`;
       if (n.tabla === 'sf_szotar') return `értékkészlet: ${esc(u.mezo)} → ${esc(u.ertek)}`;
       return esc(n.tabla + ' ' + n.muvelet);
     };
@@ -645,20 +646,44 @@ async function munkatarsLap() {
         <h3>Új munkatárs</h3>
         <div class="toolbar"><input id="m-email" type="email" placeholder="e-mail-cím" style="min-width:240px"><input id="m-nev" placeholder="név">
           ${szerepSel('szerkeszto', 'm-szerep')}<button class="btn primary" id="m-felvesz">Felvétel</button></div>
-        <div class="muted small">A felvett munkatárs a belépőoldalon az itt megadott címre kér belépési linket; a fiókja ekkor jön létre. Utána a „Jelszó” gombbal jelszót is beállíthat.</div>
+        <div class="muted small">A Felvétel a belépési fiókot is létrehozza, és kiír egy ideiglenes jelszót. Ezt add át a kollégának; az első belépés után a fejléc „Jelszó” gombjával cserélje le. Elfelejtett jelszó esetén a listában az „Új jelszó” gomb ad újat.</div>
         <div id="m-msg"></div>
       </div>
       <div class="tbl-wrap"><table><thead><tr><th>E-mail</th><th>Név</th><th>Szerep</th><th>Aktív</th><th></th></tr></thead><tbody>
         ${data.map(m => `<tr data-email="${esc(m.email)}"><td>${esc(m.email)}</td><td><input class="m-nev" value="${esc(m.nev || '')}"></td>
           <td>${szerepSel(m.szerep)}</td><td><input type="checkbox" class="m-aktiv" ${m.aktiv ? 'checked' : ''}></td>
-          <td><button class="btn small m-ment">Mentés</button></td></tr>`).join('')}
+          <td class="nowrap"><button class="btn small m-ment">Mentés</button> <button class="btn small m-jelszo">Új jelszó</button></td></tr>`).join('')}
       </tbody></table></div>`;
+    const jelszoKiad = async (email) => {
+      const { data, error } = await sb.functions.invoke('munkatars-fiok', { body: { email } });
+      if (error) {
+        let szoveg = error.message;
+        try { szoveg = (await error.context.json()).hiba || szoveg; } catch (e) { /* nincs részletes hiba */ }
+        throw new Error(szoveg);
+      }
+      if (data.hiba) throw new Error(data.hiba);
+      return data;
+    };
+    const jelszoMutat = d => {
+      $('#m-msg').innerHTML = `<div class="msg ok">${d.uj_fiok ? 'Belépési fiók létrehozva' : 'Új ideiglenes jelszó beállítva'}: <b>${esc(d.email)}</b><br>
+        Ideiglenes jelszó: <code id="m-jsz" style="font-size:1.05rem">${esc(d.jelszo)}</code> <button class="btn small" id="m-masol">másolás</button><br>
+        <span class="small">Add át a kollégának (lehetőleg ne ugyanabban az e-mailben, mint a címet); az első belépés után a „Jelszó” gombbal cserélje le. Ez a jelszó később nem jeleníthető meg újra.</span></div>`;
+      $('#m-masol').addEventListener('click', () => navigator.clipboard?.writeText(d.jelszo).then(() => { $('#m-masol').textContent = 'másolva ✓'; }));
+    };
     $('#m-felvesz').addEventListener('click', async () => {
       try {
-        await q(sb.rpc('munkatars_beallit', { p_email: $('#m-email').value, p_nev: $('#m-nev').value || null, p_szerep: $('#m-szerep').value, p_aktiv: true }));
-        munkatarsLap();
+        const email = $('#m-email').value.trim().toLowerCase();
+        await q(sb.rpc('munkatars_beallit', { p_email: email, p_nev: $('#m-nev').value || null, p_szerep: $('#m-szerep').value, p_aktiv: true }));
+        const d = await jelszoKiad(email);
+        await munkatarsLap();
+        jelszoMutat(d);
       } catch (e) { msg($('#m-msg'), e.message, 'err'); }
     });
+    app.querySelectorAll('.m-jelszo').forEach(b => b.addEventListener('click', async () => {
+      const email = b.closest('tr').dataset.email;
+      if (!confirm(`Új ideiglenes jelszót adsz neki: ${email}? A régi jelszava ezzel érvényét veszti.`)) return;
+      try { jelszoMutat(await jelszoKiad(email)); window.scrollTo(0, 0); } catch (e) { msg($('#m-msg'), e.message, 'err'); }
+    }));
     app.querySelectorAll('.m-ment').forEach(b => b.addEventListener('click', async () => {
       const tr = b.closest('tr');
       try {
