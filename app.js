@@ -195,12 +195,12 @@ const OSZLOPOK = [
   ['k:megbizhatosag', 'Kinyerés megbízhatósága'], ['k:kinyeresi_megjegyzes', 'Kinyerési megjegyzés'],
   ['k:karakterszam', 'Karakterszám'], ['k:szoszam', 'Szószám'], ['k:forras_pdf', 'Forrás PDF'],
 ];
-const ALAP_OSZLOPOK = ['k:datum', 'k:oldal', 'k:cim', 'k:szerzo', 'e:mufaj', 'e:rovat', 'e:szemely', 'e:helyszin', 'e:szervezet', 'e:osszefoglalas'];
+const ROVID_OSZLOPOK = ['k:datum', 'k:oldal', 'k:cim', 'k:szerzo', 'e:mufaj', 'e:rovat', 'e:szemely', 'e:helyszin', 'e:szervezet', 'e:osszefoglalas'];
 function oszlopok() {
-  try { const v = JSON.parse(localStorage.getItem('sf_oszlopok') || 'null'); if (Array.isArray(v) && v.length) return v.filter(k => OSZLOPOK.some(o => o[0] === k)); } catch (e) { /* nincs tárolás */ }
-  return ALAP_OSZLOPOK;
+  try { const v = JSON.parse(localStorage.getItem('sf_oszlopok2') || 'null'); if (Array.isArray(v) && v.length) return v.filter(k => OSZLOPOK.some(o => o[0] === k)); } catch (e) { /* nincs tárolás */ }
+  return OSZLOPOK.map(o => o[0]);   // alapállapot: minden oszlop látszik
 }
-function oszlopMent(v) { try { localStorage.setItem('sf_oszlopok', JSON.stringify(v)); } catch (e) { /* nincs tárolás */ } }
+function oszlopMent(v) { try { localStorage.setItem('sf_oszlopok2', JSON.stringify(v)); } catch (e) { /* nincs tárolás */ } }
 const KAT_MEZOK = 'cikk_id,azonosito,datum,oldal,cim,szerzo,cim_a_lapon,alcim,szerzo_a_lapon,illusztracio,kutatoi_megjegyzes,eleres,megbizhatosag,kinyeresi_megjegyzes,karakterszam,szoszam,forras_pdf';
 async function sorAdatok(ids) {
   const kat = {}, ert = {};
@@ -246,7 +246,7 @@ async function listaz() {
         <span style="flex:1"></span>
         <details class="oszlopvalaszto"><summary class="btn small">Oszlopok (${osz.length}/${OSZLOPOK.length})</summary>
           <div class="card osz-panel">
-            <div class="toolbar"><button class="btn small" data-osz="mind">mind</button><button class="btn small" data-osz="alap">alapnézet</button><button class="btn small" data-osz="ertelmezo">+ értelmező oszlopok</button></div>
+            <div class="toolbar"><button class="btn small" data-osz="mind">mind</button><button class="btn small" data-osz="alap">rövid nézet</button><button class="btn small" data-osz="ertelmezo">+ értelmező oszlopok</button></div>
             <div class="osz-racs">${OSZLOPOK.map(([kk, c]) => `<label><input type="checkbox" value="${kk}" ${osz.includes(kk) ? 'checked' : ''}> ${esc(c)}</label>`).join('')}</div>
           </div></details>
         <button class="btn small" id="export">Találatok letöltése (CSV, minden oszlop)</button></div>
@@ -273,7 +273,7 @@ async function listaz() {
     }));
     panel.querySelectorAll('[data-osz]').forEach(b => b.addEventListener('click', () => {
       const m = b.dataset.osz;
-      oszlopMent(m === 'mind' ? OSZLOPOK.map(o => o[0]) : m === 'alap' ? ALAP_OSZLOPOK
+      oszlopMent(m === 'mind' ? OSZLOPOK.map(o => o[0]) : m === 'alap' ? ROVID_OSZLOPOK
         : [...new Set([...oszlopok(), ...['munka', 'tarsadalombiztositas', 'eletmod', 'szarmazas', 'generaciok', 'szerepek', 'noszervezetek'].map(x => 'e:' + x)])]);
       listaz();
     }));
