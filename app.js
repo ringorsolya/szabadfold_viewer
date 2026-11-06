@@ -124,6 +124,7 @@ function route() {
   if (tab === 'ellenorzendo') return ellenorzendoLap();
   if (tab === 'naplo') return naploLap();
   if (tab === 'statisztika') return statisztikaLap();
+  if (tab === 'hianyzo') return hianyzoLap();
   if (tab === 'munkatarsak' && S.admin) return munkatarsLap();
   return bongeszo();
 }
@@ -375,7 +376,7 @@ function rajzolCikk(c, ert, sz, ell) {
           <span class="toolbar" style="margin:0">
             <label class="small"><input type="checkbox" id="kiemel" checked> kiemelés</label>
             <button class="btn small" id="sz-valt">nyers OCR</button>
-            ${S.szerk ? '<button class="btn small" id="sz-szerk">szöveg javítása</button>' : ''}
+            ${S.szerk ? `<button class="btn small" id="sz-szerk">${sz.tiszta ? 'szöveg javítása' : 'szöveg felvétele'}</button>` : ''}
           </span>
         </div>
         <div class="szoveg" id="szoveg"></div>
@@ -568,6 +569,55 @@ async function statisztikaLap() {
       Object.assign(S.k, { evek: [], szoveg: '', cim: '', mezo: b.dataset.mezo, ertek: b.dataset.ertek, megbiz: '', allapot: '', oldal: 0 });
       ugras('#bongeszo');
     }));
+  } catch (e) { app.innerHTML = `<div class="msg err">Hiba: ${esc(e.message)}</div>`; }
+}
+
+// ---------- szöveg nélküli azonosítók ----------
+const HIANY_OK = {
+  nincs_oldal_pdf: ['nincs oldal-PDF', 'Az oldal nem lett kiexportálva az Arcanumból; pótlással kinyerhető.'],
+  nem_talalhato: ['nem található az oldalon', 'Az oldal megvan, de a cikk nem azonosítható rajta (elcsúszott oldalszám vagy katalógushiba).'],
+  nincs_szoveg: ['nincs szöveg', 'Az 1958-as átadott TXT-csomagban nincs hozzá fájl.'],
+};
+async function hianyzoLap(ok = '', ev = '') {
+  app.innerHTML = '<div class="empty">Betöltés…</div>';
+  try {
+    const { data: mind } = await q(sb.from('v_szoveg_nelkul').select('*').order('sorrend').limit(5000));
+    const lista = mind.filter(r => (!ok || r.megbizhatosag === ok) && (!ev || String(r.ev) === ev));
+    const okSzam = {}, evSzam = {};
+    for (const r of mind) { okSzam[r.megbizhatosag] = (okSzam[r.megbizhatosag] || 0) + 1; evSzam[r.ev] = (evSzam[r.ev] || 0) + 1; }
+    const okCimke = k => (HIANY_OK[k] || [k || '—'])[0];
+    app.innerHTML = `
+      <div class="card szakasz">
+        <h3>Szöveg nélküli azonosítók</h3>
+        <div class="muted small">A katalógusban szerepelnek, de nincs hozzájuk cikkszöveg. ${hu(mind.length)} azonosító összesen.
+          Szerkesztőként a cikklapon a „szöveg javítása” gombbal a szöveg utólag is felvehető.</div>
+        <div class="toolbar" style="margin-top:10px">
+          <select id="h-ok"><option value="">minden ok</option>${Object.entries(okSzam).sort((x, y) => y[1] - x[1]).map(([k, n]) =>
+            `<option value="${esc(k)}" ${k === ok ? 'selected' : ''}>${esc(okCimke(k))} (${n})</option>`).join('')}</select>
+          <select id="h-ev"><option value="">minden évfolyam</option>${Object.entries(evSzam).sort((x, y) => x[0] - y[0]).map(([k, n]) =>
+            `<option value="${k}" ${k === ev ? 'selected' : ''}>${k} (${n})</option>`).join('')}</select>
+          <span style="flex:1"></span><span class="muted small">${hu(lista.length)} tétel</span>
+          <button class="btn small" id="h-csv">Lista letöltése (CSV)</button>
+        </div>
+        <div class="small">${Object.entries(HIANY_OK).map(([k, [c, l]]) => `<div><b>${esc(c)}:</b> <span class="muted">${esc(l)}</span></div>`).join('')}</div>
+      </div>
+      ${lista.length ? `<div class="tbl-wrap"><table><thead><tr><th>Azonosító</th><th>Dátum</th><th>Oldal</th><th>Cím</th><th>Szerző</th><th>Ok</th><th>Forrás PDF</th><th>Kinyerési megjegyzés</th></tr></thead><tbody>
+        ${lista.map(r => `<tr class="click" data-id="${r.cikk_id}"><td class="nowrap">${esc(r.azonosito)}</td><td class="nowrap">${dash(r.datum)}</td><td>${dash(r.oldal)}</td>
+          <td><b>${dash(r.cim)}</b></td><td>${dash(r.szerzo)}</td><td class="nowrap"><span class="badge b-warn">${esc(okCimke(r.megbizhatosag))}</span></td>
+          <td class="small">${dash(r.forras_pdf)}</td><td class="small">${r.kinyeresi_megjegyzes ? `<div class="clamp">${esc(r.kinyeresi_megjegyzes)}</div>` : dash(null)}</td></tr>`).join('')}
+      </tbody></table></div>` : '<div class="card empty">Nincs ilyen tétel.</div>'}`;
+    $('#h-ok').addEventListener('change', e => hianyzoLap(e.target.value, $('#h-ev').value));
+    $('#h-ev').addEventListener('change', e => hianyzoLap($('#h-ok').value, e.target.value));
+    app.querySelectorAll('tr.click').forEach(tr => tr.addEventListener('click', () => { S.lista = lista.map(r => r.cikk_id); ugras('#cikk/' + tr.dataset.id); }));
+    $('#h-csv').addEventListener('click', () => {
+      const fej = ['Azonosító', 'Évfolyam', 'Dátum', 'Oldal', 'Cím', 'Szerző', 'Ok', 'Forrás PDF', 'Forrás tábla', 'Kinyerési megjegyzés'];
+      const cella = v => { const t = v === null || v === undefined ? '' : String(v); return /[;"\n\r]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t; };
+      const csv = [fej, ...lista.map(r => [r.azonosito, r.ev, r.datum, r.oldal, r.cim, r.szerzo, okCimke(r.megbizhatosag), r.forras_pdf, r.forras_tabla, r.kinyeresi_megjegyzes])]
+        .map(x => x.map(cella).join(';')).join('\r\n');
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
+      a.download = `szabadfold_szoveg_nelkul_${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+    });
   } catch (e) { app.innerHTML = `<div class="msg err">Hiba: ${esc(e.message)}</div>`; }
 }
 
