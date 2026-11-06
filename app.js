@@ -123,6 +123,7 @@ function route() {
   if (tab === 'cikk') return cikklap(Number(arg));
   if (tab === 'ellenorzendo') return ellenorzendoLap();
   if (tab === 'naplo') return naploLap();
+  if (tab === 'statisztika') return statisztikaLap();
   if (tab === 'munkatarsak' && S.admin) return munkatarsLap();
   return bongeszo();
 }
@@ -483,6 +484,91 @@ function rajzolCikk(c, ert, sz, ell) {
     if (valasz === null) return;
     try { await q(sb.rpc('ellenorzendo_lezar', { p_id: Number(b.dataset.lezar), p_valasz: valasz })); ujra(); } catch (e) { hiba(e, 'Lezárás'); }
   }));
+}
+
+// ---------- leíró statisztika ----------
+const hu = n => Number(n || 0).toLocaleString('hu-HU');
+const szaz = (a, b) => b ? Math.round(100 * a / b) : 0;
+// hőtérkép-cella: egyetlen színárnyalat, a telítettség az arányt kódolja; a szám mindig kiírva
+const hoCella = (n, osszes, cim) => {
+  const p = szaz(n, osszes);
+  return `<td class="ho" style="background:color-mix(in srgb, var(--accent) ${Math.round(p * 0.55)}%, transparent)" title="${esc(cim)}: ${hu(n)} / ${hu(osszes)} (${p}%)">${n ? p + '%' : '<span class="muted">–</span>'}</td>`;
+};
+function savLista(lista, mezo, max) {
+  if (!lista || !lista.length) return '<div class="muted small">Nincs adat.</div>';
+  const m = max || Math.max(...lista.map(x => x.n));
+  return `<div class="savlista">${lista.map(x => `
+    <button class="sav-sor" data-mezo="${esc(mezo)}" data-ertek="${esc(x.ertek)}" title="${esc(x.ertek)}: ${hu(x.n)} cikk – kattints a cikkek listájáért">
+      <span class="sav-nev">${esc(x.ertek)}</span><span class="sav"><span style="width:${Math.max(1, 100 * x.n / m)}%"></span></span><span class="sav-n">${hu(x.n)}</span>
+    </button>`).join('')}</div>`;
+}
+
+async function statisztikaLap() {
+  app.innerHTML = '<div class="empty">Számolás…</div>';
+  try {
+    const { data: d } = await q(sb.rpc('sf_statisztika'));
+    const o = d.osszes, evek = d.evek || [], top = d.top || {};
+    const maxCikk = Math.max(...evek.map(e => e.cikk));
+    const kitMezok = [['mufaj', 'Műfaj'], ['rovat', 'Rovat'], ['szemely', 'Személy'], ['helyszin', 'Helyszín'], ['szervezet', 'Szervezet'],
+      ['osszefoglalas', 'Összefogl.'], ['kulcsidezet', 'Kulcsidézet'], ['alairas_telepules', 'Aláír. tel.'],
+      ['munka', 'MUNKA'], ['tarsadalombiztositas', 'TB'], ['eletmod', 'ÉLETMÓD'], ['szarmazas', 'SZÁRM.'], ['generaciok', 'GENER.'], ['szerepek', 'SZEREPEK'], ['noszervezetek', 'NŐSZERV.']];
+    const mufajok = (top.mufaj || []).map(x => x.ertek);
+    const mev = {};
+    for (const r of d.mufaj_ev || []) (mev[r.ev] ||= {})[r.mufaj] = r.n;
+    const csempe = (cim, ertek, al) => `<div class="csempe"><div class="muted small">${esc(cim)}</div><div class="csempe-szam">${ertek}</div>${al ? `<div class="muted small">${al}</div>` : ''}</div>`;
+    const W = 860, H = 220, PAD = 34, bw = (W - PAD) / evek.length;
+    const oszlop = `<svg viewBox="0 0 ${W} ${H + 40}" class="oszlopdiagram" role="img" aria-label="Cikkek száma évfolyamonként">
+      ${[0, 0.5, 1].map(f => `<line x1="${PAD}" x2="${W}" y1="${H - f * (H - 10)}" y2="${H - f * (H - 10)}" class="racs"/><text x="${PAD - 6}" y="${H - f * (H - 10) + 4}" class="tengely" text-anchor="end">${hu(Math.round(f * maxCikk))}</text>`).join('')}
+      ${evek.map((e, i) => {
+        const h = (H - 10) * e.cikk / maxCikk, x = PAD + i * bw + 2;
+        return `<g class="oszlop"><title>${e.ev}: ${hu(e.cikk)} cikk, ebből ${hu(e.szoveggel)} szöveggel</title>
+          <rect x="${x - 2}" y="0" width="${bw}" height="${H}" fill="transparent"/>
+          <path d="M${x},${H} v${-(h - 4)} q0,-4 4,-4 h${bw - 12} q4,0 4,4 v${h - 4} z" class="oszlop-test"/>
+          <text x="${x + (bw - 4) / 2}" y="${H + 16}" class="tengely" text-anchor="middle">${String(e.ev).slice(2)}</text></g>`;
+      }).join('')}
+    </svg>`;
+    app.innerHTML = `
+      <div class="csempek">
+        ${csempe('Cikkek', hu(o.cikk), `${o.evfolyam} évfolyam`)}
+        ${csempe('Szöveggel', hu(o.szoveggel), szaz(o.szoveggel, o.cikk) + '%')}
+        ${csempe('Szavak', hu(o.szo), hu(o.karakter) + ' karakter')}
+        ${csempe('Kódolt értékek', hu(o.ertek), 'aktív')}
+        ${csempe('Javítások', hu(o.javitas), hu(o.javitott_cikk) + ' cikkben')}
+        ${csempe('Ellenőrzendő', hu(o.nyitott), hu(o.lezart) + ' lezárva')}
+      </div>
+      <div class="card szakasz"><h3>Cikkek évfolyamonként</h3>${oszlop}
+        <div class="muted small">A korpuszban nem szereplő évek (1959, 1975, 1977–1980) kimaradnak; az 1958-as évfolyam csak az első félév. Az oszlopra mutatva a pontos szám látszik.</div></div>
+      <div class="card szakasz"><h3>Kitöltöttség évfolyamonként</h3>
+        <div class="muted small" style="margin-bottom:6px">A cikkek hány százalékában van legalább egy érték az adott mezőben. Minél sötétebb a cella, annál nagyobb az arány.</div>
+        <div class="tbl-wrap"><table class="ho-tabla"><thead><tr><th>Év</th><th>Cikk</th><th>Szöveg</th><th>Átl. szó</th>${kitMezok.map(([, c]) => `<th>${esc(c)}</th>`).join('')}</tr></thead>
+        <tbody>${evek.map(e => `<tr><td><b>${e.ev}</b></td><td>${hu(e.cikk)}</td>${hoCella(e.szoveggel, e.cikk, 'Szöveggel')}<td>${hu(e.szo_atlag)}</td>
+          ${kitMezok.map(([m, c]) => hoCella((e.kitoltes || {})[m] || 0, e.cikk, c)).join('')}</tr>`).join('')}</tbody></table></div></div>
+      <div class="card szakasz"><h3>Műfajok évfolyamonként</h3>
+        <div class="muted small" style="margin-bottom:6px">A cikkek száma műfajonként; a cella árnyalata az évfolyamon belüli arányt mutatja.</div>
+        <div class="tbl-wrap"><table class="ho-tabla"><thead><tr><th>Év</th>${mufajok.map(m => `<th>${esc(m)}</th>`).join('')}</tr></thead>
+        <tbody>${evek.map(e => `<tr><td><b>${e.ev}</b></td>${mufajok.map(m => {
+          const n = (mev[e.ev] || {})[m] || 0, p = szaz(n, e.cikk);
+          return `<td class="ho" style="background:color-mix(in srgb, var(--accent) ${Math.round(p * 1.1)}%, transparent)" title="${e.ev}, ${esc(m)}: ${hu(n)} cikk (${p}%)">${n ? hu(n) : '<span class="muted">–</span>'}</td>`;
+        }).join('')}</tr>`).join('')}</tbody></table></div></div>
+      <div class="stat-racs">
+        ${[['rovat', 'Leggyakoribb rovatok'], ['szemely', 'Leggyakrabban említett személyek'], ['helyszin', 'Leggyakoribb helyszínek'],
+           ['szervezet', 'Leggyakoribb szervezetek'], ['alairas_telepules', 'Levélírók települései (aláírásból)'], ['mufaj', 'Műfajok']]
+          .map(([m, c]) => `<div class="card"><h3>${esc(c)}</h3><div class="muted small" style="margin-bottom:6px">cikkek száma · első 30</div>${savLista(top[m], m)}</div>`).join('')}
+      </div>
+      <div class="card szakasz" style="margin-top:14px"><h3>Értelmező oszlopok (jelenleg csak az 1958-as kézi kódolás)</h3>
+        <div class="stat-racs">${['munka', 'tarsadalombiztositas', 'eletmod', 'szarmazas', 'generaciok', 'szerepek', 'noszervezetek']
+          .map(m => `<div><div class="mezo-nev" style="margin-bottom:4px">${esc(MEZO[m].cimke)}</div>${savLista(top[m], m)}</div>`).join('')}</div></div>
+      <div class="stat-racs" style="margin-top:14px">
+        <div class="card"><h3>Kódolt értékek forrás szerint</h3>${savLista(Object.entries(d.forras || {}).map(([k, n]) => ({ ertek: FORRAS[k] || k, n })).sort((a, b) => b.n - a.n), '')}</div>
+        <div class="card"><h3>A szövegkinyerés megbízhatósága</h3>${savLista(Object.entries(d.megbiz || {}).map(([k, n]) => ({ ertek: k, n })).sort((a, b) => b.n - a.n), '')}</div>
+      </div>
+      <div class="muted small" style="margin-top:10px">A számok az aktuális adatbázisból készülnek, a javításokkal együtt; minden megnyitáskor újraszámolódnak.</div>`;
+    app.querySelectorAll('.sav-sor').forEach(b => b.addEventListener('click', () => {
+      if (!b.dataset.mezo) return;
+      Object.assign(S.k, { evek: [], szoveg: '', cim: '', mezo: b.dataset.mezo, ertek: b.dataset.ertek, megbiz: '', allapot: '', oldal: 0 });
+      ugras('#bongeszo');
+    }));
+  } catch (e) { app.innerHTML = `<div class="msg err">Hiba: ${esc(e.message)}</div>`; }
 }
 
 // ---------- ellenőrzendő tételek ----------
