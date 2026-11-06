@@ -98,6 +98,14 @@ mark.idezet{background:var(--accent-soft);box-shadow:inset 0 -2px 0 var(--accent
 .sticky{position:sticky;top:70px}
 @media (max-width:1000px){.sticky{position:static}}
 .szakasz{margin-bottom:14px}
+.clamp{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;min-width:220px;max-width:420px}
+table.lista td{min-width:90px;max-width:340px}
+.oszlopvalaszto{position:relative}
+.oszlopvalaszto summary{list-style:none}
+.oszlopvalaszto summary::-webkit-details-marker{display:none}
+.osz-panel{position:absolute;right:0;top:36px;z-index:6;width:min(640px,92vw)}
+.osz-racs{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:4px 12px;font-size:.92rem}
+.osz-racs label{display:flex;gap:6px;align-items:center}
 .jelmagyarazat{display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:.85rem;color:var(--muted)}
 @media (max-width:700px){
   header.top{position:static}
@@ -142,6 +150,6 @@ mark.idezet{background:var(--accent-soft);box-shadow:inset 0 -2px 0 var(--accent
 <main class="wrap hidden" id="app"></main>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="app.js?v=2026-11-06b"></script>
+<script src="app.js?v=2026-11-06c"></script>
 </body>
 </html>

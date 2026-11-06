@@ -186,6 +186,41 @@ async function ertekLista() {
   } catch (e) { /* a lista csak kényelmi funkció */ }
 }
 
+// Oszlopok: a katalógus és minden kódolt mező; a választás a böngészőben megmarad
+const OSZLOPOK = [
+  ['k:azonosito', 'Azonosító'], ['k:datum', 'Dátum'], ['k:oldal', 'Oldal'], ['k:cim', 'Cím'], ['k:szerzo', 'Szerző'],
+  ['k:cim_a_lapon', 'Cím a lapon'], ['k:alcim', 'Alcím'], ['k:szerzo_a_lapon', 'Szerző (a lapon)'],
+  ...MEZOK.map(m => ['e:' + m[0], m[1]]),
+  ['k:illusztracio', 'Illusztráció'], ['k:kutatoi_megjegyzes', 'Kutatói megjegyzés'], ['k:eleres', 'Elérés'],
+  ['k:megbizhatosag', 'Kinyerés megbízhatósága'], ['k:kinyeresi_megjegyzes', 'Kinyerési megjegyzés'],
+  ['k:karakterszam', 'Karakterszám'], ['k:szoszam', 'Szószám'], ['k:forras_pdf', 'Forrás PDF'],
+];
+const ALAP_OSZLOPOK = ['k:datum', 'k:oldal', 'k:cim', 'k:szerzo', 'e:mufaj', 'e:rovat', 'e:szemely', 'e:helyszin', 'e:szervezet', 'e:osszefoglalas'];
+function oszlopok() {
+  try { const v = JSON.parse(localStorage.getItem('sf_oszlopok') || 'null'); if (Array.isArray(v) && v.length) return v.filter(k => OSZLOPOK.some(o => o[0] === k)); } catch (e) { /* nincs tárolás */ }
+  return ALAP_OSZLOPOK;
+}
+function oszlopMent(v) { try { localStorage.setItem('sf_oszlopok', JSON.stringify(v)); } catch (e) { /* nincs tárolás */ } }
+const KAT_MEZOK = 'cikk_id,azonosito,datum,oldal,cim,szerzo,cim_a_lapon,alcim,szerzo_a_lapon,illusztracio,kutatoi_megjegyzes,eleres,megbizhatosag,kinyeresi_megjegyzes,karakterszam,szoszam,forras_pdf';
+async function sorAdatok(ids) {
+  const kat = {}, ert = {};
+  for (let i = 0; i < ids.length; i += 200) {
+    const resz = ids.slice(i, i + 200);
+    const { data: c } = await q(sb.from('sf_cikk').select(KAT_MEZOK).in('cikk_id', resz));
+    const e = [];   // a szerver legfeljebb 1000 sort ad egyszerre, ezért lapozunk
+    for (let o = 0; ; o += 1000) {
+      const { data } = await q(sb.from('sf_ertek').select('cikk_id,mezo,ertek,sorszam').in('cikk_id', resz).eq('allapot', 'aktiv')
+        .order('cikk_id').order('mezo').order('sorszam').order('ertek_id').range(o, o + 999));
+      e.push(...data);
+      if (data.length < 1000) break;
+    }
+    for (const r of c) kat[r.cikk_id] = r;
+    for (const r of e) ((ert[r.cikk_id] ||= {})[r.mezo] ||= []).push(r.ertek);
+  }
+  return { kat, ert };
+}
+const cellaErtek = (kulcs, kat, ert) => kulcs.startsWith('k:') ? kat?.[kulcs.slice(2)] : (ert?.[kulcs.slice(2)] || []).join(', ');
+
 async function listaz() {
   const box = $('#talalatok');
   if (!box) return;
@@ -196,21 +231,33 @@ async function listaz() {
     S.osszes = data.length ? Number(data[0].osszes) : 0;
     const k = S.k, tol = k.oldal * PAGE;
     if (!data.length) { box.innerHTML = '<div class="card empty">Nincs találat.</div>'; return; }
+    const { kat, ert } = await sorAdatok(S.lista);
+    const osz = oszlopok();
     const kiem = t => esc(t).replace(/«/g, '<mark>').replace(/»/g, '</mark>');
+    const hosszu = new Set(['e:osszefoglalas', 'e:kulcsidezet', 'e:kodolasi_megjegyzes', 'k:kinyeresi_megjegyzes', 'k:kutatoi_megjegyzes']);
+    const cella = (kulcs, r) => {
+      let v = cellaErtek(kulcs, kat[r.cikk_id], ert[r.cikk_id]);
+      if (kulcs === 'k:eleres' && v) return `<a href="${esc(v)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">Arcanum</a>`;
+      if (kulcs === 'k:cim') return `<b>${dash(v)}</b>`;
+      return hosszu.has(kulcs) && v ? `<div class="clamp">${esc(v)}</div>` : dash(v);
+    };
     box.innerHTML = `
       <div class="toolbar"><span class="muted">${S.osszes.toLocaleString('hu-HU')} cikk · ${tol + 1}–${tol + data.length}.</span>
-        <span style="flex:1"></span><button class="btn small" id="export">Találatok letöltése (CSV)</button></div>
-      <div class="tbl-wrap"><table>
-        <thead><tr><th>Dátum</th><th>Old.</th><th>Cím</th><th>Műfaj</th><th>Rovat</th><th>Összefoglalás</th><th></th></tr></thead>
+        <span style="flex:1"></span>
+        <details class="oszlopvalaszto"><summary class="btn small">Oszlopok (${osz.length}/${OSZLOPOK.length})</summary>
+          <div class="card osz-panel">
+            <div class="toolbar"><button class="btn small" data-osz="mind">mind</button><button class="btn small" data-osz="alap">alapnézet</button><button class="btn small" data-osz="ertelmezo">+ értelmező oszlopok</button></div>
+            <div class="osz-racs">${OSZLOPOK.map(([kk, c]) => `<label><input type="checkbox" value="${kk}" ${osz.includes(kk) ? 'checked' : ''}> ${esc(c)}</label>`).join('')}</div>
+          </div></details>
+        <button class="btn small" id="export">Találatok letöltése (CSV, minden oszlop)</button></div>
+      <div class="tbl-wrap"><table class="lista">
+        <thead><tr>${osz.map(kk => `<th>${esc(OSZLOPOK.find(o => o[0] === kk)[1])}</th>`).join('')}<th></th></tr></thead>
         <tbody>${data.map(r => `
-          <tr class="click" data-id="${r.cikk_id}">
-            <td class="nowrap">${dash(r.datum)}</td><td>${dash(r.oldal)}</td>
-            <td><b>${dash(r.cim)}</b><div class="muted small">${esc(r.azonosito)}${r.szerzo ? ' · ' + esc(r.szerzo) : ''}</div></td>
-            <td>${dash(r.mufaj)}</td><td>${dash(r.rovat)}</td>
-            <td>${dash(r.osszefoglalas)}${r.talalat ? `<div class="talalat">…${kiem(r.talalat)}…</div>` : ''}</td>
+          <tr class="click" data-id="${r.cikk_id}">${osz.map(kk => `<td class="${kk === 'k:datum' || kk === 'k:azonosito' ? 'nowrap' : ''}">${cella(kk, r)}${kk === 'e:osszefoglalas' && r.talalat ? `<div class="talalat">…${kiem(r.talalat)}…</div>` : ''}</td>`).join('')}
             <td class="nowrap">${r.javitott ? '<span class="badge f-javitas">javított</span> ' : ''}${r.nyitott_ellenorzes > 0 ? `<span class="badge b-warn">${r.nyitott_ellenorzes} ellenőrzendő</span>` : ''}
               ${r.megbizhatosag && r.megbizhatosag !== 'biztos' ? `<span class="badge b-gray">${esc(r.megbizhatosag)}</span>` : ''}</td>
           </tr>`).join('')}</tbody></table></div>
+      ${!osz.includes('e:osszefoglalas') && data.some(r => r.talalat) ? '<div class="muted small">A szövegtalálatok részletei az Összefoglalás oszlopban látszanak.</div>' : ''}
       <div class="pager">
         <button class="btn" id="elozo" ${k.oldal === 0 ? 'disabled' : ''}>‹ Előző</button>
         <span class="muted">${k.oldal + 1}. / ${Math.ceil(S.osszes / PAGE)} oldal</span>
@@ -220,6 +267,16 @@ async function listaz() {
     $('#elozo').addEventListener('click', () => { k.oldal--; listaz(); window.scrollTo(0, 0); });
     $('#kov').addEventListener('click', () => { k.oldal++; listaz(); window.scrollTo(0, 0); });
     $('#export').addEventListener('click', exportCsv);
+    const panel = box.querySelector('.oszlopvalaszto');
+    panel.querySelectorAll('.osz-racs input').forEach(cb => cb.addEventListener('change', () => {
+      oszlopMent([...panel.querySelectorAll('.osz-racs input:checked')].map(x => x.value)); listaz();
+    }));
+    panel.querySelectorAll('[data-osz]').forEach(b => b.addEventListener('click', () => {
+      const m = b.dataset.osz;
+      oszlopMent(m === 'mind' ? OSZLOPOK.map(o => o[0]) : m === 'alap' ? ALAP_OSZLOPOK
+        : [...new Set([...oszlopok(), ...['munka', 'tarsadalombiztositas', 'eletmod', 'szarmazas', 'generaciok', 'szerepek', 'noszervezetek'].map(x => 'e:' + x)])]);
+      listaz();
+    }));
   } catch (e) { box.innerHTML = `<div class="msg err">Hiba a keresésben: ${esc(e.message)}</div>`; }
 }
 
@@ -231,21 +288,16 @@ async function exportCsv() {
       const { data } = await q(sb.rpc('sf_keres', keresParams(S.k, o, 500)));
       sorok.push(...data);
     }
-    const ids = sorok.map(r => r.cikk_id), ertek = {};
-    for (let i = 0; i < ids.length; i += 300) {
-      const { data } = await q(sb.from('sf_ertek').select('cikk_id,mezo,ertek,sorszam').in('cikk_id', ids.slice(i, i + 300)).eq('allapot', 'aktiv').order('sorszam'));
-      for (const e of data) ((ertek[e.cikk_id] ||= {})[e.mezo] ||= []).push(e.ertek);
-    }
-    const fej = ['Azonosító', 'Dátum', 'Oldal', 'Cím', 'Szerző', ...MEZOK.map(m => m[1])];
+    const { kat, ert } = await sorAdatok(sorok.map(r => r.cikk_id));
     const cella = v => { const s = v === null || v === undefined ? '' : String(v); return /[;"\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
-    const csv = [fej, ...sorok.map(r => [r.azonosito, r.datum, r.oldal, r.cim, r.szerzo, ...MEZOK.map(m => (ertek[r.cikk_id]?.[m[0]] || []).join(', '))])]
+    const csv = [OSZLOPOK.map(o => o[1]), ...sorok.map(r => OSZLOPOK.map(([kk]) => cellaErtek(kk, kat[r.cikk_id], ert[r.cikk_id])))]
       .map(s => s.map(cella).join(';')).join('\r\n');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
     a.download = `szabadfold_talalatok_${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
   } catch (e) { hiba(e, 'Letöltés'); }
-  btn.disabled = false; btn.textContent = 'Találatok letöltése (CSV)';
+  btn.disabled = false; btn.textContent = 'Találatok letöltése (CSV, minden oszlop)';
 }
 
 // ---------- cikklap ----------
