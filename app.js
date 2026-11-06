@@ -71,14 +71,14 @@ async function init() {
     const email = $('#email').value.trim().toLowerCase(), password = $('#jelszo').value;
     if (!password) { msg($('#loginmsg'), 'Add meg a jelszót, vagy kérj belépési linket e-mailben.', 'err'); return; }
     const { error } = await sb.auth.signInWithPassword({ email, password });
-    if (error) msg($('#loginmsg'), 'Sikertelen belépés: hibás e-mail-cím vagy jelszó. Ha még nincs jelszavad, kérj belépési linket.', 'err');
+    if (error) msg($('#loginmsg'), /confirm/i.test(error.message) ? 'Az e-mail-címed még nincs megerősítve. Kérd meg a korpusz gazdáját, hogy erősítse meg a fiókodat.' : 'Sikertelen belépés: hibás e-mail-cím vagy jelszó.', 'err');
   });
   $('#linkbtn').addEventListener('click', async () => {
     const email = $('#email').value.trim().toLowerCase();
     if (!email) { msg($('#loginmsg'), 'Előbb add meg az e-mail-címedet.', 'err'); return; }
     // a fiók az első linkkéréskor jön létre; a hozzáférést a munkatárslista adja, nem a fiók
     const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname, shouldCreateUser: true } });
-    if (error) msg($('#loginmsg'), 'Nem sikerült linket küldeni (' + error.message + ').', 'err');
+    if (error) msg($('#loginmsg'), /after \d+ seconds/.test(error.message) ? 'Biztonsági okból egy percet várni kell két linkkérés között. Próbáld újra kicsit később, vagy lépj be jelszóval.' : 'Nem sikerült linket küldeni (' + error.message + '). Lépj be jelszóval.', 'err');
     else msg($('#loginmsg'), 'Elküldtük a belépési linket. Nyisd meg ugyanebben a böngészőben.', 'ok');
   });
   $('#pwbtn').addEventListener('click', async () => {
