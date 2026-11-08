@@ -34,9 +34,13 @@ const KATALOGUS = [
   ['azonosito', 'Azonosító', false], ['datum', 'Dátum', true], ['oldal', 'Oldal', true], ['nyomtatott_oldal', 'Nyomtatott oldal', true],
   ['cim', 'Cím', true], ['cim_a_lapon', 'Cím a lapon', true], ['alcim', 'Alcím', true], ['szerzo', 'Szerző', true],
   ['szerzo_a_lapon', 'Szerző (a lapon)', true], ['illusztracio', 'Illusztráció', true], ['megbizhatosag', 'Kinyerés megbízhatósága', true],
-  ['kinyeresi_megjegyzes', 'Kinyerési megjegyzés', false], ['kutatoi_megjegyzes', 'Kutatói megjegyzés', true],
-  ['forras_pdf', 'Forrás PDF', false], ['eleres', 'Elérés', false], ['karakterszam', 'Karakterszám', false],
+  ['szoveg_eredete', 'Szöveg eredete', false], ['kinyeresi_megjegyzes', 'Kinyerési megjegyzés', false], ['kutatoi_megjegyzes', 'Kutatói megjegyzés', true],
+  ['forras_pdf', 'Forrás PDF', true], ['eleres', 'Elérés (Arcanum-link)', true], ['karakterszam', 'Karakterszám', false],
 ];
+const MEGBIZ = {
+  biztos: 'biztos (automatikus kinyerés)', bizonytalan: 'bizonytalan (automatikus kinyerés)', atvett_txt: 'átvett szöveg (1958-as TXT)',
+  kezi_bevitel: 'kézi bevitel', nincs_oldal_pdf: 'nincs oldal-PDF', nem_talalhato: 'nem található az oldalon', nincs_szoveg: 'nincs szöveg',
+};
 
 const S = {
   user: null, nev: null, szerep: null, szerk: false, admin: false, szotar: {},
@@ -153,7 +157,7 @@ function bongeszo() {
         <select id="k-mezo">${[['', 'bármely mezőben'], ...MEZOK.map(m => [m[0], m[1]])].map(([v, c]) => `<option value="${v}" ${k.mezo === v ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>
         <input type="search" id="k-ertek" list="k-ertek-lista" placeholder="…érték (részlet is lehet), pl. Tóth Gyuláné, MNOT" value="${esc(k.ertek)}" style="flex:1;min-width:200px">
         <datalist id="k-ertek-lista"></datalist>
-        <select id="k-megbiz">${[['', 'minden kinyerés'], ['biztos', 'biztos kinyerés'], ['bizonytalan', 'bizonytalan kinyerés'], ['atvett_txt', 'átvett szöveg'], ['nincs_oldal_pdf', 'nincs oldal-PDF'], ['nem_talalhato', 'nem található']].map(([v, c]) => `<option value="${v}" ${k.megbiz === v ? 'selected' : ''}>${c}</option>`).join('')}</select>
+        <select id="k-megbiz">${[['', 'minden kinyerés'], ['biztos', 'biztos kinyerés'], ['bizonytalan', 'bizonytalan kinyerés'], ['atvett_txt', 'átvett szöveg'], ['kezi_bevitel', 'kézi bevitel'], ['nincs_oldal_pdf', 'nincs oldal-PDF'], ['nem_talalhato', 'nem található'], ['nincs_szoveg', 'nincs szöveg']].map(([v, c]) => `<option value="${v}" ${k.megbiz === v ? 'selected' : ''}>${c}</option>`).join('')}</select>
         <select id="k-allapot">${[['', 'minden állapot'], ['nyitott', 'van nyitott ellenőrzendő'], ['javitott', 'javított']].map(([v, c]) => `<option value="${v}" ${k.allapot === v ? 'selected' : ''}>${c}</option>`).join('')}</select>
       </div>
       <div class="toolbar small">
@@ -365,7 +369,7 @@ function rajzolCikk(c, ert, sz, ell) {
       ${CSOPORTOK.map(([cim, mk]) => `<div class="card szakasz"><h3>${esc(cim)}</h3>${mk.map(mezoHtml).join('')}</div>`).join('')}
       <div class="card szakasz">
         <div class="mezo-fej"><h3>Katalógus</h3>${S.szerk ? '<button class="btn small" id="kat-szerk">javítás</button>' : ''}</div>
-        <div class="kv" id="kat">${KATALOGUS.map(([k, cim]) => `<div>${esc(cim)}</div><div>${k === 'eleres' && c[k] ? `<a href="${esc(c[k])}" target="_blank" rel="noopener">Arcanum</a>` : dash(c[k])}</div>`).join('')}</div>
+        <div class="kv" id="kat">${KATALOGUS.map(([k, cim]) => `<div>${esc(cim)}</div><div>${k === 'eleres' && c[k] ? `<a href="${esc(c[k])}" target="_blank" rel="noopener">${esc(c[k])}</a>` : k === 'megbizhatosag' && c[k] ? esc(MEGBIZ[c[k]] || c[k]) : dash(c[k])}</div>`).join('')}</div>
       </div>
       <div class="jelmagyarazat">Forrás: ${Object.keys(FORRAS).filter(f => f !== 'kutato_1975').map(forrasBadge).join(' ')}</div>
     </div>
@@ -446,9 +450,10 @@ function rajzolCikk(c, ert, sz, ell) {
   // --- katalógus javítása ---
   $('#kat-szerk')?.addEventListener('click', () => {
     const kat = $('#kat');
-    kat.innerHTML = KATALOGUS.map(([k, cim, szerk]) => `<div>${esc(cim)}</div><div>${szerk
-      ? (k === 'kutatoi_megjegyzes' ? `<textarea data-k="${k}">${esc(c[k] || '')}</textarea>` : `<input data-k="${k}" ${k === 'datum' ? 'type="date"' : ''} value="${esc(c[k] || '')}" style="width:100%">`)
-      : dash(c[k])}</div>`).join('') + `<div></div><div class="toolbar"><button class="btn primary" id="kat-ment">Mentés</button><button class="btn" id="kat-megse">Mégse</button></div><div></div><div id="kat-msg"></div>`;
+    const bemenet = k => k === 'kutatoi_megjegyzes' ? `<textarea data-k="${k}">${esc(c[k] || '')}</textarea>`
+      : k === 'megbizhatosag' ? `<select data-k="${k}"><option value="">—</option>${Object.entries(MEGBIZ).map(([v, l]) => `<option value="${v}" ${c[k] === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`
+      : `<input data-k="${k}" ${k === 'datum' ? 'type="date"' : k === 'eleres' ? 'type="url" placeholder="https://adt.arcanum.com/…"' : k === 'forras_pdf' ? 'placeholder="pl. SzabadFold_1958_01_05_p4.pdf"' : ''} value="${esc(c[k] || '')}" style="width:100%">`;
+    kat.innerHTML = KATALOGUS.map(([k, cim, szerk]) => `<div>${esc(cim)}</div><div>${szerk ? bemenet(k) : dash(c[k])}</div>`).join('') + `<div></div><div class="toolbar"><button class="btn primary" id="kat-ment">Mentés</button><button class="btn" id="kat-megse">Mégse</button></div><div></div><div id="kat-msg"></div>`;
     $('#kat-megse').addEventListener('click', ujra);
     $('#kat-ment').addEventListener('click', async () => {
       try {
@@ -466,7 +471,8 @@ function rajzolCikk(c, ert, sz, ell) {
     const box = $('#szoveg');
     box.innerHTML = `<textarea id="sz-t" style="min-height:60vh;font-family:inherit">${esc(sz.tiszta || '')}</textarea>
       <div class="toolbar" style="margin-top:8px"><button class="btn primary" id="sz-t-ment">Szöveg mentése</button><button class="btn" id="sz-t-megse">Mégse</button></div>
-      <div class="muted small">A javított szöveg felülírja a tisztított változatot; a korábbi szöveg a naplóban megmarad. A nyers OCR nem változik.</div><div id="sz-t-msg"></div>`;
+      <div class="muted small">${sz.tiszta ? 'A javított szöveg felülírja a tisztított változatot; a korábbi szöveg a naplóban megmarad. A nyers OCR nem változik.'
+        : 'Másold be a cikk teljes szövegét (a képaláírásokkal együtt). Mentéskor a „Kinyerés megbízhatósága” automatikusan „kézi bevitel” lesz, a „Szöveg eredete” pedig rögzíti, ki és mikor vitte be.'}</div><div id="sz-t-msg"></div>`;
     $('#sz-t-megse').addEventListener('click', ujra);
     $('#sz-t-ment').addEventListener('click', async () => {
       try { await q(sb.rpc('szoveg_javit', { p_cikk_id: c.cikk_id, p_tiszta: $('#sz-t').value })); ujra(); }
