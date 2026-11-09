@@ -10,7 +10,7 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
 });
 
-const EVEK = [1958, ...Array.from({ length: 15 }, (_, i) => 1960 + i), 1976, ...Array.from({ length: 9 }, (_, i) => 1981 + i)];
+const EVEK = [1958, 1959, ...Array.from({ length: 15 }, (_, i) => 1960 + i), 1976, ...Array.from({ length: 9 }, (_, i) => 1981 + i)];
 const PAGE = 50;
 const MEZOK = [
   // [kulcs, címke, zárt?, hosszú szöveg?]
@@ -544,7 +544,7 @@ async function statisztikaLap() {
         ${csempe('Ellenőrzendő', hu(o.nyitott), hu(o.lezart) + ' lezárva')}
       </div>
       <div class="card szakasz"><h3>Cikkek évfolyamonként</h3>${oszlop}
-        <div class="muted small">A korpuszban nem szereplő évek (1959, 1975, 1977–1980) kimaradnak; az 1958-as évfolyam csak az első félév. Az oszlopra mutatva a pontos szám látszik.</div></div>
+        <div class="muted small">A korpuszban (még) nem szereplő évek kimaradnak; az 1959-es évfolyamból egyelőre csak az első félév van bent. Az oszlopra mutatva a pontos szám látszik.</div></div>
       <div class="card szakasz"><h3>Kitöltöttség évfolyamonként</h3>
         <div class="muted small" style="margin-bottom:6px">A cikkek hány százalékában van legalább egy érték az adott mezőben. Minél sötétebb a cella, annál nagyobb az arány.</div>
         <div class="tbl-wrap"><table class="ho-tabla"><thead><tr><th>Év</th><th>Cikk</th><th>Szöveg</th><th>Átl. szó</th>${kitMezok.map(([, c]) => `<th>${esc(c)}</th>`).join('')}</tr></thead>
@@ -562,7 +562,7 @@ async function statisztikaLap() {
            ['szervezet', 'Leggyakoribb szervezetek'], ['alairas_telepules', 'Levélírók települései (aláírásból)'], ['mufaj', 'Műfajok']]
           .map(([m, c]) => `<div class="card"><h3>${esc(c)}</h3><div class="muted small" style="margin-bottom:6px">cikkek száma · első 30</div>${savLista(top[m], m)}</div>`).join('')}
       </div>
-      <div class="card szakasz" style="margin-top:14px"><h3>Értelmező oszlopok (jelenleg csak Bacsa Máté 1958-as kézi kódolása)</h3>
+      <div class="card szakasz" style="margin-top:14px"><h3>Értelmező oszlopok (jelenleg csak Bacsa Máté 1958–1959-es kézi kódolása)</h3>
         <div class="stat-racs">${['munka', 'tarsadalombiztositas', 'eletmod', 'szarmazas', 'generaciok', 'szerepek', 'noszervezetek']
           .map(m => `<div><div class="mezo-nev" style="margin-bottom:4px">${esc(MEZO[m].cimke)}</div>${savLista(top[m], m)}</div>`).join('')}</div></div>
       <div class="stat-racs" style="margin-top:14px">
