@@ -29,7 +29,7 @@ const CSOPORTOK = [
   ['Értelmező oszlopok', ['munka', 'tarsadalombiztositas', 'eletmod', 'szarmazas', 'generaciok', 'szerepek', 'noszervezetek']],
   ['Megjegyzés', ['kodolasi_megjegyzes']],
 ];
-const FORRAS = { kutato_1958: '1958 kézi', kutato_1975: '1975 kézi', gepi_2026: 'gépi', szigno_szkript: 'szignóból', javitas: 'javítás' };
+const FORRAS = { kezi_bm: 'kézi (Bacsa Máté)', kezi_bb: 'kézi (BB)', gepi_2026: 'gépi', szigno_szkript: 'szignóból', javitas: 'javítás' };
 const KATALOGUS = [
   ['azonosito', 'Azonosító', false], ['datum', 'Dátum', true], ['oldal', 'Oldal', true], ['nyomtatott_oldal', 'Nyomtatott oldal', true],
   ['cim', 'Cím', true], ['cim_a_lapon', 'Cím a lapon', true], ['alcim', 'Alcím', true], ['szerzo', 'Szerző', true],
@@ -371,7 +371,7 @@ function rajzolCikk(c, ert, sz, ell) {
         <div class="mezo-fej"><h3>Katalógus</h3>${S.szerk ? '<button class="btn small" id="kat-szerk">javítás</button>' : ''}</div>
         <div class="kv" id="kat">${KATALOGUS.map(([k, cim]) => `<div>${esc(cim)}</div><div>${k === 'eleres' && c[k] ? `<a href="${esc(c[k])}" target="_blank" rel="noopener">${esc(c[k])}</a>` : k === 'megbizhatosag' && c[k] ? esc(MEGBIZ[c[k]] || c[k]) : dash(c[k])}</div>`).join('')}</div>
       </div>
-      <div class="jelmagyarazat">Forrás: ${Object.keys(FORRAS).filter(f => f !== 'kutato_1975').map(forrasBadge).join(' ')}</div>
+      <div class="jelmagyarazat">Forrás: ${Object.keys(FORRAS).filter(f => f !== 'kezi_bb').map(forrasBadge).join(' ')}</div>
     </div>
     <div class="sticky">
       <div class="card">
@@ -562,7 +562,7 @@ async function statisztikaLap() {
            ['szervezet', 'Leggyakoribb szervezetek'], ['alairas_telepules', 'Levélírók települései (aláírásból)'], ['mufaj', 'Műfajok']]
           .map(([m, c]) => `<div class="card"><h3>${esc(c)}</h3><div class="muted small" style="margin-bottom:6px">cikkek száma · első 30</div>${savLista(top[m], m)}</div>`).join('')}
       </div>
-      <div class="card szakasz" style="margin-top:14px"><h3>Értelmező oszlopok (jelenleg csak az 1958-as kézi kódolás)</h3>
+      <div class="card szakasz" style="margin-top:14px"><h3>Értelmező oszlopok (jelenleg csak Bacsa Máté 1958-as kézi kódolása)</h3>
         <div class="stat-racs">${['munka', 'tarsadalombiztositas', 'eletmod', 'szarmazas', 'generaciok', 'szerepek', 'noszervezetek']
           .map(m => `<div><div class="mezo-nev" style="margin-bottom:4px">${esc(MEZO[m].cimke)}</div>${savLista(top[m], m)}</div>`).join('')}</div></div>
       <div class="stat-racs" style="margin-top:14px">
