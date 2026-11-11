@@ -10,7 +10,7 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
 });
 
-const EVEK = [1958, 1959, ...Array.from({ length: 17 }, (_, i) => 1960 + i), ...Array.from({ length: 9 }, (_, i) => 1981 + i)];
+const EVEK = [1958, 1959, ...Array.from({ length: 17 }, (_, i) => 1960 + i), 1979, ...Array.from({ length: 9 }, (_, i) => 1981 + i)];
 const PAGE = 50;
 const MEZOK = [
   // [kulcs, címke, zárt?, hosszú szöveg?]
